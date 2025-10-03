@@ -1,20 +1,3 @@
-/*
- * Mangayomi extension for MeioNovel (https://meionovels.com)
- *
- * This source extracts metadata and chapters from the Indonesian light‑novel site
- * MeioNovel.  The implementation is modelled after existing Madara/Mangayomi
- * sources (e.g. wordrain69.js) and attempts to follow the HTML structure used
- * across most Madara powered sites.  The majority of pages can be parsed via
- * CSS selectors against the static markup.  Chapters, however, are loaded
- * asynchronously via a WordPress Ajax endpoint.  To retrieve the full list of
- * chapters this extension calls the site’s admin‑ajax.php handler with the
- * action `manga_get_chapters` and the post ID parsed from the novel page.  If
- * this endpoint is unavailable the extension will fall back to whatever
- * chapters are present in the “Latest Manga Releases” widget on the novel
- * detail page.  Parsing relative dates (e.g. “3 hours ago”) returns the
- * current timestamp.
- */
-
 const mangayomiSources = [
   {
     "name": "MeioNovel",
@@ -29,9 +12,6 @@ const mangayomiSources = [
     "dateFormatLocale": "",
     "pkgPath": "novel/src/id/meionovels.js",
     "isNsfw": false,
-    // MeioNovel uses Cloudflare, but the static pages are accessible without
-    // additional headers.  Set hasCloudflare to false to avoid extra challenge
-    // handling in the app layer.
     "hasCloudflare": false,
   },
 ];
