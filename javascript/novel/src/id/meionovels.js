@@ -12,9 +12,8 @@ const mangayomiSources = [
     "dateFormatLocale": "",
     "pkgPath": "novel/src/id/meionovels.js",
     "isNsfw": false,
-    "hasCloudflare": false,
-  },
-];
+    "hasCloudflare": false
+ }];
 
 class DefaultExtension extends MProvider {
   /**
