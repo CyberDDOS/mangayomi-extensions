@@ -27,7 +27,7 @@ class DefaultExtension extends MProvider {
   }
 
   /**
-   * Parses a list of novels from an archive/search page.  MeioNovel uses the
+   * Parses a list of from an archive/search page.  MeioNovel uses the
    * Madara theme, so each entry is contained in a <div class="page-item-detail">
    * element.  The title, link and thumbnail can be extracted from the
    * descendant .item-thumb <a> and <img> tags.
