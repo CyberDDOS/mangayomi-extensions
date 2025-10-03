@@ -4,7 +4,8 @@ const mangayomiSources = [
     "lang": "id",
     "baseUrl": "https://meionovels.com",
     "apiUrl": "",
-    "iconUrl":    "https://raw.githubusercontent.com/CyberDDOS/mangayomi-extensions/main/javascript/icon/id.meionovels.png",
+    "iconUrl":
+"https://raw.githubusercontent.com/CyberDDOS/mangayomi-extensions/main/javascript/icon/id.meionovels.png",
     "typeSource": "single",
     "itemType": 2,
     "version": "0.0.1",
