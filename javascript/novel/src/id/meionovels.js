@@ -24,7 +24,7 @@ const mangayomiSources = [
     // Placeholder icon.  If an official icon becomes available in the future
     // replace this URL accordingly.
     iconUrl:
-      "https://raw.githubusercontent.com/Schnitzel5/sugoi-modules/main/javascript/icon/id.meionovels.png",
+      "https://raw.githubusercontent.com/CyberDDOS/mangayomi-extensions/main/javascript/icon/id.meionovels.png",
     typeSource: "single",
     itemType: 2,
     version: "0.0.1",
