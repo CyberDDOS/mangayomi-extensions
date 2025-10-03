@@ -17,25 +17,25 @@
 
 const mangayomiSources = [
   {
-    name: "MeioNovel",
-    lang: "id",
-    baseUrl: "https://meionovels.com",
-    apiUrl: "",
+    "name": "MeioNovel",
+    "lang": "id",
+    "baseUrl": "https://meionovels.com",
+    "apiUrl": "",
     // Placeholder icon.  If an official icon becomes available in the future
     // replace this URL accordingly.
-    iconUrl:
+    "iconUrl":
       "https://raw.githubusercontent.com/CyberDDOS/mangayomi-extensions/main/javascript/icon/id.meionovels.png",
-    typeSource: "single",
-    itemType: 2,
-    version: "0.0.1",
-    dateFormat: "",
-    dateFormatLocale: "",
-    pkgPath: "novel/src/id/meionovels.js",
-    isNsfw: false,
+    "typeSource": "single",
+    "itemType": 2,
+    "version": "0.0.1",
+    "dateFormat": "",
+    "dateFormatLocale": "",
+    "pkgPath": "novel/src/id/meionovels.js",
+    "isNsfw": false,
     // MeioNovel uses Cloudflare, but the static pages are accessible without
     // additional headers.  Set hasCloudflare to false to avoid extra challenge
     // handling in the app layer.
-    hasCloudflare: false,
+    "hasCloudflare": false,
   },
 ];
 
