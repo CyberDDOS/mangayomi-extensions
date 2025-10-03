@@ -21,10 +21,7 @@ const mangayomiSources = [
     "lang": "id",
     "baseUrl": "https://meionovels.com",
     "apiUrl": "",
-    // Placeholder icon.  If an official icon becomes available in the future
-    // replace this URL accordingly.
-    "iconUrl":
-      "https://raw.githubusercontent.com/CyberDDOS/mangayomi-extensions/main/javascript/icon/id.meionovels.png",
+    "iconUrl":    "https://raw.githubusercontent.com/CyberDDOS/mangayomi-extensions/main/javascript/icon/id.meionovels.png",
     "typeSource": "single",
     "itemType": 2,
     "version": "0.0.1",
