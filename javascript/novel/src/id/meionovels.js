@@ -18,33 +18,34 @@ const mangayomiSources = [
 
 class DefaultExtension extends MProvider {
   getHeaders(url) {
-    throw new Error("getHeaders not implemented");
+    return {};
   }
 
   mangaListFromPage(res) {
     const doc = new Document(res.body);
-    const mangaElements = doc.select("div.page-item-detail");
+    const els = doc.select("div.page-item-detail");
     const list = [];
-    for (const element of mangaElements) {
-      const anchor = element.selectFirst(".item-thumb > a");
-      if (!anchor) continue;
-      const name = anchor.attr("title");
-      const link = anchor.getHref;
-      const imageUrl = element.selectFirst("img")?.getSrc;
+    for (const el of els) {
+      const a = el.selectFirst(".item-thumb > a");
+      if (!a) continue;
+      const name = a.attr("title");
+      const link = a.getHref;
+      const imageUrl = el.selectFirst("img")?.getSrc;
+      if (!link || !imageUrl) continue;
       list.push({ name, imageUrl, link });
     }
     const hasNextPage = doc.selectFirst("div.nav-links > div.nav-previous") !== null;
-    return { list: list, hasNextPage };
+    return { list, hasNextPage };
   }
 
-  toStatus(status) {
-    if (!status) return 5;
-    status = status.toLowerCase();
-    if (status.includes("ongoing")) return 0;
-    else if (status.includes("completed")) return 1;
-    else if (status.includes("hiatus")) return 2;
-    else if (status.includes("dropped")) return 3;
-    else return 5;
+  toStatus(t) {
+    if (!t) return 5;
+    t = t.toLowerCase();
+    if (t.includes("ongoing")) return 0;
+    if (t.includes("completed")) return 1;
+    if (t.includes("hiatus")) return 2;
+    if (t.includes("dropped")) return 3;
+    return 5;
   }
 
   async getPopular(page) {
@@ -60,17 +61,36 @@ class DefaultExtension extends MProvider {
   }
 
   async search(query, page, filters) {
-    const encoded = encodeURIComponent(query);
+    const enc = encodeURIComponent(query);
     const client = new Client();
-    let url = `${this.source.baseUrl}/?s=${encoded}&post_type=wp-manga&page=${page}`;
+
+    let url = `${this.source.baseUrl}/?s=${enc}&post_type=wp-manga&page=${page}`;
     let res = await client.get(url);
-    let result = this.mangaListFromPage(res);
-    if (result.list.length === 0) {
-      url = `${this.source.baseUrl}/?s=${encoded}&page=${page}`;
+    let out = this.mangaListFromPage(res);
+
+    if (out.list.length === 0) {
+      url = `${this.source.baseUrl}/?s=${enc}&page=${page}`;
       res = await client.get(url);
-      result = this.mangaListFromPage(res);
+      out = this.mangaListFromPage(res);
     }
-    return result;
+
+    if (out.list.length === 0 && page === 1) {
+      const kebab = query.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      const acro = query.trim().split(/\s+/).map(w => w[0]?.toLowerCase() || "").join("");
+      const candidates = Array.from(new Set([kebab, acro])).filter(s => s);
+      for (const slug of candidates) {
+        try {
+          const r = await client.get(`${this.source.baseUrl}/novel/${slug}/`);
+          const d = new Document(r.body);
+          const img = d.selectFirst("div.summary_image img")?.getSrc;
+          const title = d.selectFirst("div.post-title h1, h1.entry-title")?.text.trim() || slug;
+          if (img) out.list.push({ name: title, imageUrl: img, link: `${this.source.baseUrl}/novel/${slug}/` });
+        } catch (_) {}
+      }
+      out.hasNextPage = false;
+    }
+
+    return out;
   }
 
   async getDetail(url) {
@@ -79,119 +99,81 @@ class DefaultExtension extends MProvider {
     const doc = new Document(res.body);
 
     const imageUrl = doc.selectFirst("div.summary_image > a > img")?.getSrc;
+
     const description = doc
       .select("#editdescription > p")
-      .map((el) => el.text.trim())
+      .map(e => e.text.trim())
       .join("\n");
-    const author = doc
-      .select("div.author-content > a")
-      .map((el) => el.text.trim())
-      .join(", ");
-    const artist = doc
-      .select("div.artist-content > a")
-      .map((el) => el.text.trim())
-      .join(", ");
-    const statusText = doc
-      .selectFirst("div.post-status .summary-content")
-      ?.text.trim() || "";
-    const status = this.toStatus(statusText);
-    const genre = doc
-      .select("div.genres-content > a")
-      .map((el) => el.text.trim());
-    const tags = doc
-      .select("div.tags-content > a")
-      .map((el) => el.text.trim());
-    if (tags.length > 0) genre.push(...tags);
 
-    let chapters = [];
+    const author = doc.select("div.author-content > a").map(e => e.text.trim()).join(", ");
+    const artist = doc.select("div.artist-content > a").map(e => e.text.trim()).join(", ");
+
+    const statusText = doc.selectFirst("div.post-status .summary-content")?.text.trim() || "";
+    const status = this.toStatus(statusText);
+
+    const genre = doc.select("div.genres-content > a").map(e => e.text.trim());
+    const tags = doc.select("div.tags-content > a").map(e => e.text.trim());
+    if (tags.length) genre.push(...tags);
+
+    const chapters = [];
     const id = doc.selectFirst("#manga-chapters-holder")?.attr("data-id");
     if (id) {
       try {
-        const chapRes = await client.get(
-          `${this.source.baseUrl}/wp-admin/admin-ajax.php?action=manga_get_chapters&view=full&manga=${id}&paged=1`
-        );
-        const chapDoc = new Document(chapRes.body);
-        const chapterElements = chapDoc.select("li.wp-manga-chapter");
-        for (const el of chapterElements) {
-          const chapterAnchor = el.selectFirst("a");
-          if (!chapterAnchor) continue;
-          const chapterName = chapterAnchor.text.trim();
-          const chapterUrl = chapterAnchor.getHref;
-          const dateStr = el.selectFirst("span.chapter-release-date")?.text.trim();
+        const cr = await client.get(`${this.source.baseUrl}/wp-admin/admin-ajax.php?action=manga_get_chapters&view=full&manga=${id}&paged=1`);
+        const cd = new Document(cr.body);
+        const ces = cd.select("li.wp-manga-chapter");
+        for (const ce of ces) {
+          const a = ce.selectFirst("a");
+          if (!a) continue;
+          const name = a.text.trim();
+          const chapterUrl = a.getHref;
+          const ds = ce.selectFirst("span.chapter-release-date")?.text.trim();
           let dateUpload = null;
-          if (dateStr) {
-            try {
-              dateUpload = this.parseDate(dateStr);
-            } catch (_) {
-              dateUpload = null;
-            }
+          if (ds) {
+            try { dateUpload = this.parseDate(ds); } catch (_) { dateUpload = null; }
           }
-          chapters.push({
-            name: chapterName,
-            url: chapterUrl,
-            dateUpload: dateUpload,
-            scanlator: null
-          });
+          chapters.push({ name, url: chapterUrl, dateUpload, scanlator: null });
         }
       } catch (_) {}
     }
 
     if (chapters.length === 0) {
-      const latestList = doc.select("div#latest-manga-releases li");
-      for (const el of latestList) {
-        const chapterAnchor = el.selectFirst("a");
-        if (!chapterAnchor) continue;
-        const chapterName = chapterAnchor.text.trim();
-        const chapterUrl = chapterAnchor.getHref;
-        const dateStr = el.selectFirst("span")?.text.trim();
+      const latest = doc.select("div#latest-manga-releases li");
+      for (const li of latest) {
+        const a = li.selectFirst("a");
+        if (!a) continue;
+        const name = a.text.trim();
+        const chapterUrl = a.getHref;
+        const ds = li.selectFirst("span")?.text.trim();
         let dateUpload = null;
-        if (dateStr) {
-          try {
-            dateUpload = this.parseDate(dateStr);
-          } catch (_) {
-            dateUpload = null;
-          }
+        if (ds) {
+          try { dateUpload = this.parseDate(ds); } catch (_) { dateUpload = null; }
         }
-        chapters.push({
-          name: chapterName,
-          url: chapterUrl,
-          dateUpload: dateUpload,
-          scanlator: null
-        });
+        chapters.push({ name, url: chapterUrl, dateUpload, scanlator: null });
       }
     }
 
     chapters.reverse();
 
-    return {
-      imageUrl,
-      description,
-      genre,
-      author,
-      artist,
-      status,
-      chapters
-    };
+    return { imageUrl, description, genre, author, artist, status, chapters };
   }
 
   async getHtmlContent(name, url) {
-    const client = await new Client();
-    const res = await client.get(url);
+    const res = await new Client().get(url);
     return await this.cleanHtmlContent(res.body);
   }
 
   async cleanHtmlContent(html) {
     const doc = new Document(html);
-    const readingContainer =
-      doc.selectFirst(".reading-content") || doc.selectFirst(".entry-content");
-    if (!readingContainer) return html;
+    const cont = doc.selectFirst(".reading-content") || doc.selectFirst(".entry-content");
+    if (!cont) return html;
     let title = "";
-    const titleEl = readingContainer.selectFirst("h1, h2, h3, h4");
-    if (titleEl) title = titleEl.text.trim();
-    let content = readingContainer.innerHtml;
-    if (titleEl) {
-      const titleHtml = titleEl.outerHtml || "";
-      content = content.replace(titleHtml, "");
+    const t = cont.selectFirst("h1, h2, h3, h4");
+    if (t) title = t.text.trim();
+    let content = cont.innerHtml;
+    if (t) {
+      const th = t.outerHtml || "";
+      content = content.replace(th, "");
     }
     return `<h2>${title}</h2><hr><br>${content}`;
   }
@@ -201,7 +183,7 @@ class DefaultExtension extends MProvider {
   }
 
   getSourcePreferences() {
-    throw new Error("getSourcePreferences not implemented");
+    return [];
   }
 
   parseDate(date) {
@@ -215,23 +197,16 @@ class DefaultExtension extends MProvider {
     const day = parts[1];
     const year = parts[2];
     const months = {
-      january: "01",
-      february: "02",
-      march: "03",
-      april: "04",
-      may: "05",
-      june: "06",
-      july: "07",
-      august: "08",
-      september: "09",
-      october: "10",
-      november: "11",
-      december: "12"
+      january: "01", february: "02", march: "03", april: "04",
+      may: "05", june: "06", july: "07", august: "08",
+      september: "09", october: "10", november: "11", december: "12"
     };
-    const month = months[monthName.toLowerCase()];
+    const month = months[parts[0].toLowerCase()];
     if (!month) return String(Date.now());
-    const iso = `${year}-${month}-${day.padStart(2, "0")}`;
+    const iso = `${parts[2]}-${month}-${parts[1].padStart(2, "0")}`;
     const ts = Date.parse(iso);
     return isNaN(ts) ? String(Date.now()) : String(ts);
   }
 }
+
+const extension = new DefaultExtension();
