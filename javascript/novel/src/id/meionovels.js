@@ -82,9 +82,11 @@ class DefaultExtension extends MProvider {
         try {
           const r = await client.get(`${this.source.baseUrl}/novel/${slug}/`);
           const d = new Document(r.body);
-          const img = d.selectFirst("div.summary_image img")?.getSrc;
-          const title = d.selectFirst("div.post-title h1, h1.entry-title")?.text.trim() || slug;
-          if (img) out.list.push({ name: title, imageUrl: img, link: `${this.source.baseUrl}/novel/${slug}/` });
+          let title = d.selectFirst("div.post-title h1, h1.entry-title")?.text.trim();
+          if (!title) title = d.selectFirst("meta[property='og:title']")?.attr("content") || slug;
+          let img = d.selectFirst("div.summary_image img")?.getSrc;
+          if (!img) img = d.selectFirst("meta[property='og:image']")?.attr("content") || this.source.iconUrl;
+          out.list.push({ name: title, imageUrl: img, link: `${this.source.baseUrl}/novel/${slug}/` });
         } catch (_) {}
       }
       out.hasNextPage = false;
@@ -98,19 +100,14 @@ class DefaultExtension extends MProvider {
     const res = await client.get(url);
     const doc = new Document(res.body);
 
-    const imageUrl = doc.selectFirst("div.summary_image > a > img")?.getSrc;
+    let imageUrl = doc.selectFirst("div.summary_image > a > img")?.getSrc;
+    if (!imageUrl) imageUrl = doc.selectFirst("meta[property='og:image']")?.attr("content") || "";
 
-    const description = doc
-      .select("#editdescription > p")
-      .map(e => e.text.trim())
-      .join("\n");
-
+    const description = doc.select("#editdescription > p").map(e => e.text.trim()).join("\n");
     const author = doc.select("div.author-content > a").map(e => e.text.trim()).join(", ");
     const artist = doc.select("div.artist-content > a").map(e => e.text.trim()).join(", ");
-
     const statusText = doc.selectFirst("div.post-status .summary-content")?.text.trim() || "";
     const status = this.toStatus(statusText);
-
     const genre = doc.select("div.genres-content > a").map(e => e.text.trim());
     const tags = doc.select("div.tags-content > a").map(e => e.text.trim());
     if (tags.length) genre.push(...tags);
@@ -197,9 +194,18 @@ class DefaultExtension extends MProvider {
     const day = parts[1];
     const year = parts[2];
     const months = {
-      january: "01", february: "02", march: "03", april: "04",
-      may: "05", june: "06", july: "07", august: "08",
-      september: "09", october: "10", november: "11", december: "12"
+      january: "01",
+      february: "02",
+      march: "03",
+      april: "04",
+      may: "05",
+      june: "06",
+      july: "07",
+      august: "08",
+      september: "09",
+      october: "10",
+      november: "11",
+      december: "12",
     };
     const month = months[parts[0].toLowerCase()];
     if (!month) return String(Date.now());
