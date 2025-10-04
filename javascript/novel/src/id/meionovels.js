@@ -7,7 +7,7 @@ const mangayomiSources = [
     "iconUrl": "https://raw.githubusercontent.com/CyberDDOS/mangayomi-extensions/main/javascript/icon/id.meionovels.png",
     "typeSource": "single",
     "itemType": 2,
-    "version": "0.0.2",
+    "version": "0.0.4",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "novel/src/id/meionovels.js",
@@ -17,9 +17,7 @@ const mangayomiSources = [
 ];
 
 class DefaultExtension extends MProvider {
-  getHeaders(url) {
-    return {};
-  }
+  getHeaders(url) { return {}; }
 
   mangaListFromPage(res) {
     const doc = new Document(res.body);
@@ -30,8 +28,9 @@ class DefaultExtension extends MProvider {
       if (!a) continue;
       const name = a.attr("title");
       const link = a.getHref;
-      const imageUrl = el.selectFirst("img")?.getSrc;
-      if (!link || !imageUrl) continue;
+      let imageUrl = el.selectFirst("img")?.getSrc;
+      if (!imageUrl) imageUrl = this.source.iconUrl;
+      if (!link) continue;
       list.push({ name, imageUrl, link });
     }
     const hasNextPage = doc.selectFirst("div.nav-links > div.nav-previous") !== null;
@@ -75,13 +74,18 @@ class DefaultExtension extends MProvider {
     }
 
     if (out.list.length === 0 && page === 1) {
+      const words = query.trim().split(/\s+/);
       const kebab = query.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-      const acro = query.trim().split(/\s+/).map(w => w[0]?.toLowerCase() || "").join("");
-      const candidates = Array.from(new Set([kebab, acro])).filter(s => s);
+      const acronym = words.map(w => (w ? w[0].toLowerCase() : "")).join("");
+      const candidates = [];
+      if (acronym) candidates.push(acronym);
+      if (kebab && kebab !== acronym) candidates.push(kebab);
       for (const slug of candidates) {
         try {
           const r = await client.get(`${this.source.baseUrl}/novel/${slug}/`);
           const d = new Document(r.body);
+          const valid = d.selectFirst("#manga-chapters-holder") || d.selectFirst("div.post-title h1, h1.entry-title");
+          if (!valid) continue;
           let title = d.selectFirst("div.post-title h1, h1.entry-title")?.text.trim();
           if (!title) title = d.selectFirst("meta[property='og:title']")?.attr("content") || slug;
           let img = d.selectFirst("div.summary_image img")?.getSrc;
@@ -116,20 +120,27 @@ class DefaultExtension extends MProvider {
     const id = doc.selectFirst("#manga-chapters-holder")?.attr("data-id");
     if (id) {
       try {
-        const cr = await client.get(`${this.source.baseUrl}/wp-admin/admin-ajax.php?action=manga_get_chapters&view=full&manga=${id}&paged=1`);
-        const cd = new Document(cr.body);
-        const ces = cd.select("li.wp-manga-chapter");
-        for (const ce of ces) {
-          const a = ce.selectFirst("a");
-          if (!a) continue;
-          const name = a.text.trim();
-          const chapterUrl = a.getHref;
-          const ds = ce.selectFirst("span.chapter-release-date")?.text.trim();
-          let dateUpload = null;
-          if (ds) {
-            try { dateUpload = this.parseDate(ds); } catch (_) { dateUpload = null; }
+        const ajax = `${this.source.baseUrl}/wp-admin/admin-ajax.php`;
+        const body = `action=manga_get_chapters&view=full&manga=${encodeURIComponent(id)}&paged=1`;
+        let cr = await client.post(ajax, body, { "Content-Type": "application/x-www-form-urlencoded" });
+        let chtml = cr?.body || "";
+        if (!chtml || chtml.trim() === "0") {
+          cr = await client.get(`${ajax}?${body}`);
+          chtml = cr?.body || "";
+        }
+        if (chtml) {
+          const cd = new Document(chtml);
+          const ces = cd.select("li.wp-manga-chapter");
+          for (const ce of ces) {
+            const a = ce.selectFirst("a");
+            if (!a) continue;
+            const name = a.text.trim();
+            const chapterUrl = a.getHref;
+            const ds = ce.selectFirst("span.chapter-release-date")?.text.trim();
+            let dateUpload = null;
+            if (ds) { try { dateUpload = this.parseDate(ds); } catch (_) { dateUpload = null; } }
+            chapters.push({ name, url: chapterUrl, dateUpload, scanlator: null });
           }
-          chapters.push({ name, url: chapterUrl, dateUpload, scanlator: null });
         }
       } catch (_) {}
     }
@@ -143,15 +154,17 @@ class DefaultExtension extends MProvider {
         const chapterUrl = a.getHref;
         const ds = li.selectFirst("span")?.text.trim();
         let dateUpload = null;
-        if (ds) {
-          try { dateUpload = this.parseDate(ds); } catch (_) { dateUpload = null; }
-        }
+        if (ds) { try { dateUpload = this.parseDate(ds); } catch (_) { dateUpload = null; } }
         chapters.push({ name, url: chapterUrl, dateUpload, scanlator: null });
       }
     }
 
-    chapters.reverse();
+    if (chapters.length === 0) {
+      const first = doc.selectFirst("a[href*='/chapter-1/'], a[href*='/mtl/chapter-1/']");
+      if (first) chapters.push({ name: "Chapter 1", url: first.getHref, dateUpload: null, scanlator: null });
+    }
 
+    chapters.reverse();
     return { imageUrl, description, genre, author, artist, status, chapters };
   }
 
@@ -175,13 +188,8 @@ class DefaultExtension extends MProvider {
     return `<h2>${title}</h2><hr><br>${content}`;
   }
 
-  getFilterList() {
-    return [];
-  }
-
-  getSourcePreferences() {
-    return [];
-  }
+  getFilterList() { return []; }
+  getSourcePreferences() { return []; }
 
   parseDate(date) {
     if (!date) return String(Date.now());
@@ -190,9 +198,6 @@ class DefaultExtension extends MProvider {
     const clean = date.replace(/,/g, "");
     const parts = clean.split(/\s+/);
     if (parts.length < 3) return String(Date.now());
-    const monthName = parts[0];
-    const day = parts[1];
-    const year = parts[2];
     const months = {
       january: "01",
       february: "02",
@@ -209,7 +214,7 @@ class DefaultExtension extends MProvider {
     };
     const month = months[parts[0].toLowerCase()];
     if (!month) return String(Date.now());
-    const iso = `${parts[2]}-${month}-${parts[1].padStart(2, "0")}`;
+    const iso = `${parts[2]}-${month}-${parts[1].padStart(2,"0")}`;
     const ts = Date.parse(iso);
     return isNaN(ts) ? String(Date.now()) : String(ts);
   }
